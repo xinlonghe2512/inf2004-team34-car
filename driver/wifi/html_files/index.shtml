@@ -1,0 +1,28 @@
+<!DOCTYPE html>
+<html>
+
+<head>
+    <title>Dynamic Link from Textbox</title>
+</head>
+
+<body>
+    <p> Current Status: <!--#status--> </p>
+    <p> Barcode Read: <!--#barcode--> </p>
+    <input type="text" id="urlInput" placeholder="Enter URL">
+    <a id="dynamicLink" href="/send.cgi?send=start"><button>Go</button></a>
+
+    <script>
+        // Add an event listener to the textbox to update the link
+        document.getElementById("urlInput").addEventListener("input", updateLink);
+
+        function updateLink() {
+            // Get the value entered in the textbox
+            var inputValue = document.getElementById("urlInput").value;
+
+            // Update the href attribute of the anchor link
+            document.getElementById("dynamicLink").href = "/send.cgi?send=" + inputValue;
+        }
+    </script>
+</body>
+
+</html>
