@@ -45,6 +45,11 @@ int main(void) {
             printf("Turn right");
         }
 
+        else if (rightResult > WHITE_THRESHOLD && leftResult > WHITE_THRESHOLD)
+        {
+            printf("On track");
+        }
+
         else
         {
             printf("Off track");
