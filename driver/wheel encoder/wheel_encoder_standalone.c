@@ -20,10 +20,10 @@ void gpio_callback(uint gpio, uint32_t events) {
     // so we can print it
     static uint32_t edge_fall_time = 0;
     gpio_event_string(event_str, events);
-    if (events == 4){
+    if (events == 4){ // Edge fall
         num_edge++;
         edge_fall_time = time_us_32(); // Time is in microseconds
-    } else if (events == 8){   
+    } else if (events == 8){    // Edge rise
         width_sum -= width_data[width_index];
         width_data[width_index] = (time_us_32() - edge_fall_time); //Convert microsecond to millisecond
         width_sum += width_data[width_index];
@@ -41,6 +41,7 @@ bool print_out(struct repeating_timer *t) {
     d_travelled += distance_per_sec;
     // 0.314/2 = 0.157cm is the estimatd length of each slit
     speed_per_sec = 0.157/width_average; 
+    printf("Total distance: %f\n", d_travelled);
     printf("Speed using edge per sec: %f cm/s\n", distance_per_sec);
     printf("Speed using pluse width: %f cm/s\n\n", speed_per_sec);
     num_edge = 0; //Reset number of edge per second
