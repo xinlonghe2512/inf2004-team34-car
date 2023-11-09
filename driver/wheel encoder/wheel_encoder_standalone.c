@@ -2,57 +2,69 @@
 #include "pico/stdlib.h"
 #include "hardware/gpio.h"
 
-static char event_str[128];
-static int num_edge;
+//static char event_str[128];
+static int num_edge_l;
+static int num_edge_r;
+static float pulse_width_l;
+static float pulse_width_r;
+static float t_distance_travelled;
 struct repeating_timer timer;
-static uint32_t pulse_width;
-static int width_data[4] = {0};
-static int width_index = 0;
-static int width_count = 0;
-static float width_average = 0;
-static int width_sum = 0;
-static float d_travelled = 0;
+
+
 
 void gpio_event_string(char *buf, uint32_t events);
 
 void gpio_callback(uint gpio, uint32_t events) {
     // Put the GPIO event(s) that just happened into event_str
     // so we can print it
-    static uint32_t edge_fall_time = 0;
-    gpio_event_string(event_str, events);
-    if (events == 4){ // Edge fall
-        num_edge++;
-        edge_fall_time = time_us_32(); // Time is in microseconds
-    } else if (events == 8){    // Edge rise
-        width_sum -= width_data[width_index];
-        width_data[width_index] = (time_us_32() - edge_fall_time); //Convert microsecond to millisecond
-        width_sum += width_data[width_index];
-        width_index = (width_index + 1) % 4;
-        if (width_count < 4) width_count++; 
-        width_average = (float) (width_sum/(1000000.0f))/width_count;
+    static uint32_t edge_fall_time_l;
+    static uint32_t edge_fall_time_r;
+    //gpio_event_string(event_str, events);
+    if (gpio == 6){ // Edge fall
+        pulse_width_l = (float) (time_us_32() - edge_fall_time_l)/(1000000.0f);
+        num_edge_l++;
+        edge_fall_time_l = time_us_32(); // Time is in microseconds
+    } else if (gpio == 7){    // Edge rise
+        pulse_width_r = (float) (time_us_32() - edge_fall_time_r)/(1000000.0f);
+        num_edge_r++;
+        edge_fall_time_r = time_us_32(); // Time is in microseconds
     }
 }
 
 bool print_out(struct repeating_timer *t) {
-    float speed_per_sec = 0; // Measure in cm/s
+    float speed_per_sec_l = 0; // Measure in cm/s
+    float speed_per_sec_r = 0; // Measure in cm/s
     float distance_per_sec = 0; // Measured in cm
     // Approximation of distance travelled. Found using diameter of wheel encoder disc (2cm), circumfrence (6.28cm), Each slit + pillar is approx. 6.28/20 = 0.314cm
-    distance_per_sec= (num_edge*0.314); 
-    d_travelled += distance_per_sec;
-    // 0.314/2 = 0.157cm is the estimatd length of each slit
-    speed_per_sec = 0.157/width_average; 
-    printf("Total distance: %f\n", d_travelled);
+    distance_per_sec= (((num_edge_l+num_edge_r)/2)*0.314); 
+    t_distance_travelled += distance_per_sec;
+    // 0.314cm is the estimatd length of each slit
+    speed_per_sec_l = (pulse_width_l > 0) ? 0.314/pulse_width_l : 0; 
+    speed_per_sec_r = (pulse_width_r > 0) ? 0.314/pulse_width_r : 0; 
+    printf("Total distance: %f\n", t_distance_travelled);
     printf("Speed using edge per sec: %f cm/s\n", distance_per_sec);
-    printf("Speed using pluse width: %f cm/s\n\n", speed_per_sec);
-    num_edge = 0; //Reset number of edge per second
+    printf("Speed using left pluse width: %f cm/s\n", speed_per_sec_l);
+    printf("Speed using right pluse width: %f cm/s\n\n", speed_per_sec_r);
+    num_edge_l = 0;
+    num_edge_r = 0; //Reset number of edge per second
     return true;
 }
 
 int main() {
     stdio_init_all();
 
+    // Set pin 8 as power
+
     printf("Hello GPIO IRQ\n"); 
-    gpio_set_irq_enabled_with_callback(2, GPIO_IRQ_EDGE_RISE | GPIO_IRQ_EDGE_FALL, true, &gpio_callback);
+    gpio_set_function(6, GPIO_IN);
+    gpio_set_function(7, GPIO_IN);
+
+
+    // Configure GPIO pin 6
+    gpio_set_irq_enabled_with_callback(6, GPIO_IRQ_EDGE_FALL, true, &gpio_callback);
+    // Configure GPIO pin 7
+    gpio_set_irq_enabled_with_callback(7, GPIO_IRQ_EDGE_FALL, true, &gpio_callback);
+
     add_repeating_timer_ms(-1000, print_out, NULL, &timer);
     // Wait forever
     while (1);
