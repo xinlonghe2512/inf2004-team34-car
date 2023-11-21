@@ -21,11 +21,11 @@ void gpio_callback(uint gpio, uint32_t events) {
     static uint32_t edge_fall_time_l;
     static uint32_t edge_fall_time_r;
     //gpio_event_string(event_str, events);
-    if (gpio == ENCODER_LEFT){ // 
+    if (gpio == ENCODER_LEFT){ // Left
         pulse_width_l = (float) (time_us_32() - edge_fall_time_l)/(1000000.0f);
         num_edge_l++;
         edge_fall_time_l = time_us_32(); // Time is in microseconds
-    } else if (gpio == ENCODER_RIGHT){    // Edge rise
+    } else if (gpio == ENCODER_RIGHT){    // Right
         pulse_width_r = (float) (time_us_32() - edge_fall_time_r)/(1000000.0f);
         num_edge_r++;
         edge_fall_time_r = time_us_32(); // Time is in microseconds
