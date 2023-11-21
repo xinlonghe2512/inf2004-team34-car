@@ -10,8 +10,6 @@ static float pulse_width_r;
 static float t_distance_travelled;
 struct repeating_timer timer;
 
-
-
 void gpio_event_string(char *buf, uint32_t events);
 
 void gpio_callback(uint gpio, uint32_t events) {
@@ -20,11 +18,11 @@ void gpio_callback(uint gpio, uint32_t events) {
     static uint32_t edge_fall_time_l;
     static uint32_t edge_fall_time_r;
     //gpio_event_string(event_str, events);
-    if (gpio == 6){ // Edge fall
+    if (gpio == 6){ // If GPIO 6
         pulse_width_l = (float) (time_us_32() - edge_fall_time_l)/(1000000.0f);
         num_edge_l++;
         edge_fall_time_l = time_us_32(); // Time is in microseconds
-    } else if (gpio == 7){    // Edge rise
+    } else if (gpio == 7){    // If GPIO 7
         pulse_width_r = (float) (time_us_32() - edge_fall_time_r)/(1000000.0f);
         num_edge_r++;
         edge_fall_time_r = time_us_32(); // Time is in microseconds
@@ -35,18 +33,23 @@ bool print_out(struct repeating_timer *t) {
     float speed_per_sec_l = 0; // Measure in cm/s
     float speed_per_sec_r = 0; // Measure in cm/s
     float distance_per_sec = 0; // Measured in cm
+    
     // Approximation of distance travelled. Found using diameter of wheel encoder disc (2cm), circumfrence (6.28cm), Each slit + pillar is approx. 6.28/20 = 0.314cm
     distance_per_sec= (((num_edge_l+num_edge_r)/2)*0.314); 
     t_distance_travelled += distance_per_sec;
+    
     // 0.314cm is the estimatd length of each slit
     speed_per_sec_l = (pulse_width_l > 0) ? 0.314/pulse_width_l : 0; 
     speed_per_sec_r = (pulse_width_r > 0) ? 0.314/pulse_width_r : 0; 
+    
     printf("Total distance: %f\n", t_distance_travelled);
     printf("Speed using edge per sec: %f cm/s\n", distance_per_sec);
     printf("Speed using left pluse width: %f cm/s\n", speed_per_sec_l);
     printf("Speed using right pluse width: %f cm/s\n\n", speed_per_sec_r);
+
+    //Reset number of edge per second
     num_edge_l = 0;
-    num_edge_r = 0; //Reset number of edge per second
+    num_edge_r = 0; 
     return true;
 }
 
@@ -70,31 +73,3 @@ int main() {
     while (1);
 }
 
-
-static const char *gpio_irq_str[] = {
-        "LEVEL_LOW",  // 0x1
-        "LEVEL_HIGH", // 0x2
-        "EDGE_FALL",  // 0x4
-        "EDGE_RISE"   // 0x8
-};
-
-void gpio_event_string(char *buf, uint32_t events) {
-    for (uint i = 0; i < 4; i++) {
-        uint mask = (1 << i);
-        if (events & mask) {
-            // Copy this event string into the user string
-            const char *event_str = gpio_irq_str[i];
-            while (*event_str != '\0') {
-                *buf++ = *event_str++;
-            }
-            events &= ~mask;
-
-            // If more events add ", "
-            if (events) {
-                *buf++ = ',';
-                *buf++ = ' ';
-            }
-        }
-    }
-    *buf++ = '\0';
-}
