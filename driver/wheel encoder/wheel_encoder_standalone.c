@@ -2,6 +2,9 @@
 #include "pico/stdlib.h"
 #include "hardware/gpio.h"
 
+#define ENCODER_LEFT 6
+#define ENCODER_RIGHT 7
+
 //static char event_str[128];
 static int num_edge_l;
 static int num_edge_r;
@@ -18,11 +21,11 @@ void gpio_callback(uint gpio, uint32_t events) {
     static uint32_t edge_fall_time_l;
     static uint32_t edge_fall_time_r;
     //gpio_event_string(event_str, events);
-    if (gpio == 6){ // If GPIO 6
+    if (gpio == ENCODER_LEFT){ // 
         pulse_width_l = (float) (time_us_32() - edge_fall_time_l)/(1000000.0f);
         num_edge_l++;
         edge_fall_time_l = time_us_32(); // Time is in microseconds
-    } else if (gpio == 7){    // If GPIO 7
+    } else if (gpio == ENCODER_RIGHT){    // Edge rise
         pulse_width_r = (float) (time_us_32() - edge_fall_time_r)/(1000000.0f);
         num_edge_r++;
         edge_fall_time_r = time_us_32(); // Time is in microseconds
@@ -42,12 +45,13 @@ bool print_out(struct repeating_timer *t) {
     speed_per_sec_l = (pulse_width_l > 0) ? 0.314/pulse_width_l : 0; 
     speed_per_sec_r = (pulse_width_r > 0) ? 0.314/pulse_width_r : 0; 
     
+    // Print onto console
     printf("Total distance: %f\n", t_distance_travelled);
     printf("Speed using edge per sec: %f cm/s\n", distance_per_sec);
     printf("Speed using left pluse width: %f cm/s\n", speed_per_sec_l);
     printf("Speed using right pluse width: %f cm/s\n\n", speed_per_sec_r);
-
-    //Reset number of edge per second
+    
+    // Reset number of edge per second
     num_edge_l = 0;
     num_edge_r = 0; 
     return true;
@@ -59,17 +63,15 @@ int main() {
     // Set pin 8 as power
 
     printf("Hello GPIO IRQ\n"); 
-    gpio_set_function(6, GPIO_IN);
-    gpio_set_function(7, GPIO_IN);
-
+    gpio_set_function(ENCODER_LEFT, GPIO_IN);
+    gpio_set_function(ENCODER_RIGHT, GPIO_IN);
 
     // Configure GPIO pin 6
-    gpio_set_irq_enabled_with_callback(6, GPIO_IRQ_EDGE_FALL, true, &gpio_callback);
+    gpio_set_irq_enabled_with_callback(ENCODER_LEFT, GPIO_IRQ_EDGE_FALL, true, &gpio_callback);
     // Configure GPIO pin 7
-    gpio_set_irq_enabled_with_callback(7, GPIO_IRQ_EDGE_FALL, true, &gpio_callback);
+    gpio_set_irq_enabled_with_callback(ENCODER_RIGHT, GPIO_IRQ_EDGE_FALL, true, &gpio_callback);
 
     add_repeating_timer_ms(-1000, print_out, NULL, &timer);
     // Wait forever
     while (1);
 }
-
