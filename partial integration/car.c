@@ -71,7 +71,7 @@ absolute_time_t endTime;
 
 uint slice_num0;
 uint slice_num1;
-volatile bool moving = true;
+volatile bool blocked = true;
 
 // set pins for 3.3V and GND
 const uint BTN_PIN1 = 18; // pin for channel A
@@ -120,6 +120,7 @@ void stopCar(uint slice_num0, uint slice_num1);
 void sendInitiationPulse(uint trigPin);
 void getUltrasonicDetection(uint64_t pulseLength);
 void startCar(uint slice_num0, uint slice_num1);
+void reverseCar(uint slice_num0, uint slice_num1);
 
 uint8_t barcodeFirstChar = 0;
 uint8_t barcodeSecondChar = 0;
@@ -924,16 +925,16 @@ void getUltrasonicDetection(uint64_t pulseLength)
 
     ultrasonic_average = (ultrasonic_average / 50);
 
-    if(ultrasonic_average <= 15 && ultrasonic_average > 0 && moving)
+    if(ultrasonic_average <= 15 && ultrasonic_average > 0 && !blocked)
     {
-        stopCar(slice_num0, slice_num1);
-        moving = false;
+        reverseCar(slice_num0, slice_num1);
+        blocked = true;
     }
 
-    else if (ultrasonic_average > 15 && ultrasonic_average != 0 && !moving)
+    else if (ultrasonic_average > 15 && ultrasonic_average != 0 && blocked)
     {
         startCar(slice_num0, slice_num1);
-        moving = true;
+        blocked = false;
     }
 
     // Display the results obtained after smoothing
@@ -999,6 +1000,20 @@ void startCar(uint slice_num0, uint slice_num1)
 { 
     pwm_set_chan_level(slice_num0, PWM_CHAN_A, speedRight);  // Start Channel A
     pwm_set_chan_level(slice_num1, PWM_CHAN_B, speedLeft);  // Start Channel B
+    pwm_set_enabled(slice_num0, true);
+    pwm_set_enabled(slice_num1, true);
+}
+
+// function to reverse car
+void reverseCar(uint slice_num0, uint slice_num1)
+{
+   
+    gpio_set_pulls(BTN_PIN1, !left1, !left2);
+    gpio_set_pulls(BTN_PIN2, !left3, !left4);
+    gpio_set_pulls(BTN_PIN3, !right1, !right2);
+    gpio_set_pulls(BTN_PIN4, !right3, !right4);
+    pwm_set_chan_level(slice_num0, PWM_CHAN_A, 12500);  // Stop Channel A
+    pwm_set_chan_level(slice_num1, PWM_CHAN_B, 12500);  // Stop Channel B
     pwm_set_enabled(slice_num0, true);
     pwm_set_enabled(slice_num1, true);
 }
@@ -1088,7 +1103,7 @@ void ReadIRSensor()
             turnSharpRight(slice_num0, slice_num1, BTN_PIN1, BTN_PIN2, left1, left2, left3, left4);
         }
 
-        else if (rightResult > WHITE_TRACKING_THRESHOLD && leftResult > WHITE_TRACKING_THRESHOLD)
+        else if (rightResult > WHITE_TRACKING_THRESHOLD && leftResult > WHITE_TRACKING_THRESHOLD && !blocked)
         {
             startCar(slice_num0, slice_num1);
             turningLeft = false;
