@@ -14,7 +14,16 @@ FlowChart
 ![image](https://github.com/xinlonghe2512/inf2004-team34-car/assets/30991653/6a434190-0f54-4897-b441-23e798d57dca)
 
 # Required libraries
-
+hardware_i2c
+hardware_timer
+hardware_gpio
+pico_cyw43_arch_lwip_sys_freertos
+hardware_pwm
+pico_stdlib
+pico_lwip_iperf
+FreeRTOS-Kernel-Heap4 
+pico_lwip_http 
+hardware_irq
 
 # How to run the program
 In the code, change the wifi SSID and password to your own hotspot and build. Once built drag the uf2 file into the pico. Check the pico's IP address through your hotspot and type it into your browser.
