@@ -88,6 +88,7 @@ uint8_t readRegister(uint8_t addr, uint8_t reg)
 
 void readAccelerometer(int16_t *x, int16_t *y, int16_t *z) 
 {
+    // Get data from acceleromter registers and divide by conversion factor
     *x = (int16_t)((readRegister(ACCEL_ADDR, ACCEL_X_HIGH) << 8) | readRegister(ACCEL_ADDR, ACCEL_X_LOW));
     *y = (int16_t)((readRegister(ACCEL_ADDR, ACCEL_Y_HIGH) << 8) | readRegister(ACCEL_ADDR, ACCEL_Y_LOW));
     *z = (int16_t)((readRegister(ACCEL_ADDR, ACCEL_Z_HIGH) << 8) | readRegister(ACCEL_ADDR, ACCEL_Z_LOW));
@@ -99,6 +100,7 @@ void readAccelerometer(int16_t *x, int16_t *y, int16_t *z)
 
 void readMagnetometer(int16_t *x, int16_t *y, int16_t *z) 
 {
+    // Get data from magnetometer registers
     *x = (int16_t)((readRegister(MAG_ADDR, MAG_X_HIGH) << 8) | readRegister(MAG_ADDR, MAG_X_LOW));
     *y = (int16_t)((readRegister(MAG_ADDR, MAG_Y_HIGH) << 8) | readRegister(MAG_ADDR, MAG_Y_LOW));
     *z = (int16_t)((readRegister(MAG_ADDR, MAG_Z_HIGH) << 8) | readRegister(MAG_ADDR, MAG_Z_LOW));
@@ -127,28 +129,33 @@ int main() {
     initKalmanFilter(&magFilter, 0.01, 0.1);
 
     while (1) {
+	// Read accelerometer and magnetometer values
         int16_t accelX, accelY, accelZ;
         readAccelerometer(&accelX, &accelY, &accelZ);
 
         int16_t MagX, MagY, MagZ;
         readMagnetometer(&MagX, &MagY, &MagZ);
-
+	
+	// Apply kalman filter to both accelerometer and magnetometer data
         int16_t noisyAccelData[3] = {accelX, accelY, accelZ};
         updateKalmanFilter(&accelFilter, noisyAccelData);
 
         int16_t noisyMagData[3] = {MagX, MagY, MagZ};
         updateKalmanFilter(&magFilter, noisyMagData);
-
+	
+	// Calculate heading using magnetometer data
         float heading = atan2(magFilter.x[1], magFilter.x[0]);
         heading *= 180.0 / M_PI;
 
         if(heading < 0) {
             heading += 360;
         }
-
+	
+	// Print data
         printf("Accelerometer: x=%d, y=%d, z=%d\n", accelFilter.x[0], accelFilter.x[1], accelFilter.x[2]);
         printf("Magnetometer: x=%d, y=%d, z=%d, heading=%.2f deg\n\n", magFilter.x[0], magFilter.x[1], magFilter.x[2], heading);
-
+	
+	// Delay for approximately 1 second until next iteration
         sleep_ms(1000);
     }
 
