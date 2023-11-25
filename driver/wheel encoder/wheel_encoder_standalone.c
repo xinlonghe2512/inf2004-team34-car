@@ -5,7 +5,6 @@
 #define ENCODER_LEFT 6
 #define ENCODER_RIGHT 7
 
-//static char event_str[128];
 static int num_edge_l;
 static int num_edge_r;
 static float pulse_width_l;
@@ -16,19 +15,17 @@ struct repeating_timer timer;
 void gpio_event_string(char *buf, uint32_t events);
 
 void gpio_callback(uint gpio, uint32_t events) {
-    // Put the GPIO event(s) that just happened into event_str
-    // so we can print it
     static uint32_t edge_fall_time_l;
     static uint32_t edge_fall_time_r;
-    //gpio_event_string(event_str, events);
-    if (gpio == ENCODER_LEFT){ // Left
-        pulse_width_l = (float) (time_us_32() - edge_fall_time_l)/(1000000.0f);
+    
+    if (gpio == ENCODER_LEFT){ // If left wheel
+        pulse_width_l = (float) (time_us_32() - edge_fall_time_l)/(1000000.0f); // Pulse width in seconds
         num_edge_l++;
-        edge_fall_time_l = time_us_32(); // Time is in microseconds
-    } else if (gpio == ENCODER_RIGHT){    // Right
-        pulse_width_r = (float) (time_us_32() - edge_fall_time_r)/(1000000.0f);
+        edge_fall_time_l = time_us_32(); // Reset timer
+    } else if (gpio == ENCODER_RIGHT){    // If right wheel
+        pulse_width_r = (float) (time_us_32() - edge_fall_time_r)/(1000000.0f); // Pulse width in seconds
         num_edge_r++;
-        edge_fall_time_r = time_us_32(); // Time is in microseconds
+        edge_fall_time_r = time_us_32(); 
     }
 }
 
@@ -60,8 +57,7 @@ bool print_out(struct repeating_timer *t) {
 int main() {
     stdio_init_all();
 
-    // Set pin 8 as power
-
+    // Setup pins
     printf("Hello GPIO IRQ\n"); 
     gpio_set_function(ENCODER_LEFT, GPIO_IN);
     gpio_set_function(ENCODER_RIGHT, GPIO_IN);
@@ -70,7 +66,7 @@ int main() {
     gpio_set_irq_enabled_with_callback(ENCODER_LEFT, GPIO_IRQ_EDGE_FALL, true, &gpio_callback);
     // Configure GPIO pin 7
     gpio_set_irq_enabled_with_callback(ENCODER_RIGHT, GPIO_IRQ_EDGE_FALL, true, &gpio_callback);
-
+    // Timer for prints
     add_repeating_timer_ms(-1000, print_out, NULL, &timer);
     // Wait forever
     while (1);
