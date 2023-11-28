@@ -10,9 +10,13 @@
 #include <string.h>
 #include <math.h>
 
+#include "pico/cyw43_arch.h"
 #include "pico/stdlib.h"
 #include "pico/stdio.h"
 #include "pico/binary_info.h"
+
+#include "lwipopts.h"
+#include "lwip/apps/httpd.h"
 
 #include "hardware/i2c.h"
 #include "hardware/adc.h"
@@ -33,12 +37,10 @@
 
 #define ADC_DIFFERENCE_THRESHHOLD 100
 
-// Global Variables
 uint8_t barcodeFirstChar = 0;
 uint8_t barcodeSecondChar = 0;
 uint8_t barcodeThirdChar = 0;
 
-// Barcode Type Enumeration
 enum bartype
 {
     THICK_BLACK, // 0
@@ -47,8 +49,7 @@ enum bartype
     THIN_WHITE   // 3
 };
 
-// Barcode Array Mappings
-// These arrays represent the pattern of bars for each character in Code 39 barcode format.
+// code 39 format of letter F using enum bartype
 static char *A_ARRAY_MAP = "031312130";
 static char *B_ARRAY_MAP = "130312130";
 static char *C_ARRAY_MAP = "030312131";
@@ -79,16 +80,17 @@ static char *Z_ARRAY_MAP = "120303131";
 // code 39 format of asterisk using enum bartype
 static char *ASTERISK_ARRAY_MAP = "121303031";
 
-// Variables for ADC and Timing
 static uint32_t res = 0;
 static uint16_t prevAvg = 0;
+
 static int i = 0;
 static int barcode_arr_index = 1;
+
 char *outputBuffer;
+
 static absolute_time_t blockStart;
 static absolute_time_t blockEnd;
 
-// Structure to Classify Voltage Readings
 struct voltageClassification
 {
     uint16_t voltage;
@@ -109,13 +111,11 @@ static char barcodeRead[3];
 // function to append to barcodeRead Queue
 static void appendToBarcodeRead(char barcodeChar)
 {
-     // This function updates the barcodeRead array with the new character.
     barcodeRead[0] = barcodeRead[1];
     barcodeRead[1] = barcodeRead[2];
     barcodeRead[2] = barcodeChar;
 }
 
-// Pattern Mappings and Character Arrays
 static char *patternMappings[] = {
     "031312130", "130312130", "030312131", "131302130", "031302131",
     "130302131", "131312030", "031312031", "130312031", "131302031",
@@ -126,10 +126,8 @@ static char *patternMappings[] = {
 
 const char characters[] = "ABCDEFGHIJKLMNOPQRSTUVWXYZ*";
 
-// Function to Validate Barcode
 static int isValidBarcode()
 {
-    // This function checks if the read barcode is valid.
     if (barcodeRead[0] == '*' && barcodeRead[2] == '*')
     {
         if (barcodeRead[1] != 0)
@@ -145,10 +143,8 @@ static int isValidBarcode()
     return 0;
 }
 
-// Function to Check if Barcode is Full
 static int isBarcodeFull()
 {
-    // This function checks if the barcodeRead array is fully populated.
     if (barcodeRead[0] != 0 && barcodeRead[1] != 0 && barcodeRead[2] != 0)
     {
         return 1;
@@ -157,10 +153,8 @@ static int isBarcodeFull()
     return 0;
 }
 
-// Function to Clear Barcode Read Array
 static void clearBarcodeRead()
 {
-    // This function resets the barcodeRead array.
     barcodeRead[0] = 0;
     barcodeRead[1] = 0;
     barcodeRead[2] = 0;
@@ -566,9 +560,154 @@ char checkBarcodeMatch(char *reversedCharacterArray)
     return '\0'; // Return '\0' to indicate no match found
 }
 
+// WIFI PORTION
+const char WIFI_SSID[] = "Ivan";
+const char WIFI_PASSWORD[] = "begmeplease";
+
+// SSI tags - tag length limited to 8 bytes by default
+const char *ssi_tags[] = {"barcode", "status"};
+
+u16_t ssi_handler(int iIndex, char *pcInsert, int iInsertLen)
+{
+    size_t printed;
+    static uint8_t barcodeCharacter;
+    switch (iIndex)
+    {
+    case 0: // barcode placeholder
+    {
+        if (isValidBarcode() == 1)
+        {
+           
+            printed = snprintf(pcInsert, iInsertLen, "%c\n\r", barcodeRead[1]);
+
+        }
+        else if (isValidBarcode() == 2)
+        {
+            int characterIndex = findCharacterIndex(barcodeRead[1]);
+            char *characterArray = patternMappings[characterIndex];
+            char *barcodeDecoded = reverseString(characterArray);
+            barcodeCharacter = decodeReverse(barcodeDecoded);
+
+            printed = snprintf(pcInsert, iInsertLen, "%c\n\r", barcodeCharacter);
+
+        }
+    }
+    break;
+    case 1: // status
+    {
+        bool status = cyw43_arch_gpio_get(CYW43_WL_GPIO_LED_PIN);
+        if (status == true)
+        {
+            printed = snprintf(pcInsert, iInsertLen, "START");
+        }
+        else
+        {
+            printed = snprintf(pcInsert, iInsertLen, "STOP");
+        }
+    }
+    break;
+
+    default:
+        printed = 0;
+        break;
+    }
+
+    return (u16_t)printed;
+}
+
+// Initialise the SSI handler
+void ssi_init()
+{
+    // Initialise ADC (internal pin)
+    adc_init();
+    adc_set_temp_sensor_enabled(true);
+    adc_select_input(4);
+
+    http_set_ssi_handler(ssi_handler, ssi_tags, LWIP_ARRAYSIZE(ssi_tags));
+}
+
+// CGI handler which is run when a request for /led.cgi is detected
+const char *cgi_led_handler(int iIndex, int iNumParams, char *pcParam[], char *pcValue[])
+{
+    // Check if an request for LED has been made (/led.cgi?led=x)
+    if (strcmp(pcParam[0], "led") == 0)
+    {
+        // Look at the argument to check if LED is to be turned on (x=1) or off (x=0)
+        if (strcmp(pcValue[0], "0") == 0)
+            cyw43_arch_gpio_put(CYW43_WL_GPIO_LED_PIN, 0);
+        
+        else if (strcmp(pcValue[0], "1") == 0)
+            cyw43_arch_gpio_put(CYW43_WL_GPIO_LED_PIN, 1);
+    }
+
+    // Send the index page back to the user
+    return "/index.shtml";
+}
+
+const char *cgi_message_handler(int iIndex, int iNumParams, char *pcParam[], char *pcValue[])
+{
+    // Check if message is sent (/send.cgi?send=x)
+    if (strcmp(pcParam[0], "send") == 0)
+    {
+        // Look at the argument to check if message received is to be "start" or "stop"
+        if (strcmp(pcValue[0], "stop") == 0)
+        {
+            cyw43_arch_gpio_put(CYW43_WL_GPIO_LED_PIN, 0);
+        }
+        else if (strcmp(pcValue[0], "start") == 0)
+        {
+            cyw43_arch_gpio_put(CYW43_WL_GPIO_LED_PIN, 1);
+        }
+    }
+
+    // Send the index page back to the user
+    return "/index.shtml";
+}
+
+// tCGI Struct
+// Fill this with all of the CGI requests and their respective handlers
+static const tCGI cgi_handlers[] = {
+    {// Html request for "/led.cgi" triggers cgi_handler
+     "/led.cgi", cgi_led_handler
+
+    },
+    {"/send.cgi", cgi_message_handler},
+};
+
+void cgi_init(void)
+{
+    http_set_cgi_handlers(cgi_handlers, 2);
+}
+
+
 int main()
 {
- // Initialization of ADC and GPIO.
+    stdio_init_all();
+
+    // wifi init
+    cyw43_arch_init();
+
+    cyw43_arch_enable_sta_mode();
+
+    // Connect to the WiFI network - loop until connected
+    while (cyw43_arch_wifi_connect_timeout_ms(WIFI_SSID, WIFI_PASSWORD, CYW43_AUTH_WPA2_AES_PSK, 30000) != 0)
+    {
+        printf("Attempting to connect...\n");
+    }
+    // Print a success message once connected
+    printf("Connected! \n");
+
+    // Initialise web server
+    httpd_init();
+    printf("Http server initialised\n");
+
+    // Configure SSI and CGI handler
+    ssi_init();
+    printf("SSI Handler initialised\n");
+    cgi_init();
+    printf("CGI Handler initialised\n");
+
+    // ========================================================
     adc_init();
 
     // init the queue
@@ -590,30 +729,6 @@ int main()
 
     sleep_ms(2000);
 
-    // The main loop continuously checks for valid barcodes and processes them accordingly.
     while (true)
-    {
-         if (isValidBarcode() == 1)
-        {
-            printf("%c\n\r", barcodeRead[1]);
-            clearBarcodeRead();
-            barcodeFirstChar = 0;
-            barcodeSecondChar = 0;
-            barcodeThirdChar = 0;
-
-        }
-        else if (isValidBarcode() == 2)
-        {
-            int characterIndex = findCharacterIndex(barcodeRead[1]);
-            char *characterArray = patternMappings[characterIndex];
-            char *barcodeDecoded = reverseString(characterArray);
-            
-            printf("%c\n\r", decodeReverse(barcodeDecoded));
-            clearBarcodeRead();
-            barcodeFirstChar = 0;
-            barcodeSecondChar = 0;
-            barcodeThirdChar = 0;
-
-        }
-    }
+    {}
 }
