@@ -813,23 +813,27 @@ void wifiTask()
 
 
 
-///////////Wheel Encoder////////////
+///////////Global callback////////////
 void gpio_callback(uint gpio, uint32_t events) 
-{
-
+{ 
     if (gpio == ECHO_PIN && GPIO_IRQ_EDGE_RISE)
-    {
+    {   
+        // Disable trigger pin
         gpio_put(TRIGGER_PIN, 0);
+        // Get start time when edge rise
         startTime = get_absolute_time();
     }
 
     if (gpio == ECHO_PIN && GPIO_IRQ_EDGE_FALL)
     {
+        // Get end time at edge fall
         endTime = get_absolute_time();
+        // Check if difference between start and end time more than timeout
         if (absolute_time_diff_us(startTime, endTime) > TIMEOUT_US)
         {
             startTime = endTime;
         }
+        // Pass the time calculated to calculate ultrasonic distance
         getUltrasonicDetection(absolute_time_diff_us(startTime, endTime));
     }
 
@@ -849,6 +853,7 @@ void gpio_callback(uint gpio, uint32_t events)
     // }
 }
 
+///////////Wheel Encoder////////////
 // bool print_out(struct repeating_timer *t) {
 //     float speed_per_sec_l = 0; // Measure in cm/s
 //     float speed_per_sec_r = 0; // Measure in cm/s
@@ -913,27 +918,32 @@ void getUltrasonicDetection(uint64_t pulseLength)
     }
 
     ultrasonic_average = (ultrasonic_average / 50);
+    // Enable trigger pin to send out the next pulse again
+    gpio_put(TRIGGER_PIN, 1);
 
+    // If detect obstacle, reverse
     if(ultrasonic_average <= 15 && ultrasonic_average > 0 && !blocked)
     {
         reverseCar(slice_num0, slice_num1);
         blocked = true;
     }
 
+    // If no obstacle detected and was previously blocked, continue moving
     else if (ultrasonic_average > 15 && ultrasonic_average != 0 && blocked)
     {
         startCar(slice_num0, slice_num1);
         blocked = false;
     }
 
-    // Display the results obtained after smoothing
-    //printf("Moving Distance: %.2f cm\n\n", ultrasonic_average);
 }
 
+// Ultrasonic task for freertos
 void UltrasonicTask()
-{
+{   
+    // Setup ultrasonic pins
     setupUltrasonicPins(TRIGGER_PIN, ECHO_PIN);
 
+    // Get distance between ultrasonic and the obstacle in front every 100 ms
     struct repeating_timer timer;
     add_repeating_timer_ms(100, repeating_timer_callback, NULL, &timer);
 
@@ -1072,9 +1082,11 @@ void SetupIRSensorPins()
 
 void ReadIRSensor()
 {
+    // float for conversion
     const float conversion_factor = 3.3f / (1 << 12);
     while (1) 
     {
+        // Disable adc run for reading of each IR, add busy wait so there is enough time for adc to switch
         adc_run(false);
         busy_wait_ms(pdMS_TO_TICKS(10));
         adc_select_input(ADC_CHANNEL_PIN_ONE);
@@ -1085,6 +1097,7 @@ void ReadIRSensor()
         uint32_t rightRead = adc_read();
         float rightResult = rightRead * conversion_factor;
 
+        // If left IR sensor detect white and right detect black and car is not turning, turn left and set target angle to turn
         if(leftResult < WHITE_TRACKING_THRESHOLD && rightResult > WHITE_TRACKING_THRESHOLD && !turningRight && !turningLeft)
         {
             targetAngle = heading - 80;
@@ -1096,6 +1109,7 @@ void ReadIRSensor()
             turnSharpLeft(slice_num0, slice_num1, BTN_PIN3, BTN_PIN4, right1, right2, right3, right4);
         }
 
+        // If right IR sensor detect white and left detect black and car is not turning, turn right and set target angle to turn
         else if (rightResult < WHITE_TRACKING_THRESHOLD && leftResult > WHITE_TRACKING_THRESHOLD && !turningRight && !turningLeft)
         {
              if(targetAngle > 360)
@@ -1107,18 +1121,20 @@ void ReadIRSensor()
             turnSharpRight(slice_num0, slice_num1, BTN_PIN1, BTN_PIN2, left1, left2, left3, left4);
         }
 
+        // If both IR sensor detect black and car is not turning, start moving the car
         else if (rightResult > WHITE_TRACKING_THRESHOLD && leftResult > WHITE_TRACKING_THRESHOLD && !blocked && !turningRight && !turningLeft)
         {
             startCar(slice_num0, slice_num1);
         }
 
+        // If both IR sensor detect white and car is not turning, stop the car as end has been reached
         else if(rightResult < WHITE_TRACKING_THRESHOLD && leftResult < WHITE_TRACKING_THRESHOLD && !turningRight && !turningLeft)
         {
             stopCar(slice_num0, slice_num1);
         }
 
+         //go back to barcode tracking
         adc_run(true);
-        //go back to barcode tracking
         adc_select_input(0);
 
         vTaskDelay(pdMS_TO_TICKS(5));
@@ -1159,6 +1175,7 @@ void setupMagnetometer()
 
 void readAccelerometer(int16_t *x, int16_t *y, int16_t *z) 
 {
+    // Read accelerometer registers
     *x = (int16_t)((readRegister(ACCEL_ADDR, ACCEL_X_HIGH) << 8) | readRegister(ACCEL_ADDR, ACCEL_X_LOW));
     *y = (int16_t)((readRegister(ACCEL_ADDR, ACCEL_Y_HIGH) << 8) | readRegister(ACCEL_ADDR, ACCEL_Y_LOW));
     *z = (int16_t)((readRegister(ACCEL_ADDR, ACCEL_Z_HIGH) << 8) | readRegister(ACCEL_ADDR, ACCEL_Z_LOW));
@@ -1170,6 +1187,7 @@ void readAccelerometer(int16_t *x, int16_t *y, int16_t *z)
 
 void readMagnetometer(int16_t *x, int16_t *y, int16_t *z) 
 {
+     // Read magnetometer registers
     *x = (int16_t)((readRegister(MAG_ADDR, MAG_X_HIGH) << 8) | readRegister(MAG_ADDR, MAG_X_LOW));
     *y = (int16_t)((readRegister(MAG_ADDR, MAG_Y_HIGH) << 8) | readRegister(MAG_ADDR, MAG_Y_LOW));
     *z = (int16_t)((readRegister(MAG_ADDR, MAG_Z_HIGH) << 8) | readRegister(MAG_ADDR, MAG_Z_LOW));
@@ -1182,10 +1200,11 @@ void readAllMagnetometerData()
 
     while (1)
     {
+        // Read accelerometer and magnetometer data
         readAccelerometer(&accelX, &accelY, &accelZ);
-
         readMagnetometer(&MagX, &MagY, &MagZ);
 
+        // Calculate heading
         heading = atan2(MagY, MagX);
         heading *= 180.0f / M_PI;
 
@@ -1193,7 +1212,7 @@ void readAllMagnetometerData()
             heading += 360;
         }
 
-
+        // if car is turning, check if car has reached angle and stop turning. Added a 10 degree buffer
         if(turningLeft || turningRight)
         {
             if(abs(heading - targetAngle) <= 10)
@@ -1207,13 +1226,12 @@ void readAllMagnetometerData()
         vTaskDelay(pdMS_TO_TICKS(10));
     }
     
-    }
+}
 
 void vLaunch( void) 
 {
 
-// Create the various tasks to read, calculate and print the average temperatures
-
+    // Create the various threads for the car
     TaskHandle_t irSensorTask;
     xTaskCreate(ReadIRSensor, "IRSensorThread", configMINIMAL_STACK_SIZE , NULL, 3, &irSensorTask);
 
@@ -1239,6 +1257,7 @@ void vLaunch( void)
 
 int main( void )
 {
+    // Setup all pins
     stdio_init_all();
     SetupIRSensorPins();
     SetupMotorPins();
